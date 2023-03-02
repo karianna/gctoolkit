@@ -32,6 +32,8 @@ import java.util.logging.Logger;
  */
 public abstract class AbstractJavaVirtualMachine implements JavaVirtualMachine {
 
+    private boolean debugging = Boolean.getBoolean("microsoft.debug.aggregation");
+
     private static final Logger LOGGER = Logger.getLogger(AbstractJavaVirtualMachine.class.getName());
     private static final double LOG_FRAGMENT_THRESHOLD_SECONDS = 60.0d; //todo: replace magic threshold with a heuristic
 
@@ -153,11 +155,13 @@ public abstract class AbstractJavaVirtualMachine implements JavaVirtualMachine {
     @SuppressWarnings("unchecked")
     private Constructor<? extends Aggregator<?>> constructor(Aggregation aggregation) {
         Class<? extends Aggregator<?>> targetClazz = aggregation.collates();
-        Constructor<?>[] constructors = targetClazz.getConstructors();
-        for ( Constructor<?> constructor : constructors) {
-            Parameter[] parameters = constructor.getParameters();
-            if ( parameters.length == 1 && Aggregation.class.isAssignableFrom(parameters[0].getType()))
-                return (Constructor<? extends Aggregator<?>>)constructor;
+        if ( targetClazz != null) {
+            Constructor<?>[] constructors = targetClazz.getConstructors();
+            for (Constructor<?> constructor : constructors) {
+                Parameter[] parameters = constructor.getParameters();
+                if (parameters.length == 1 && Aggregation.class.isAssignableFrom(parameters[0].getType()))
+                    return (Constructor<? extends Aggregator<?>>) constructor;
+            }
         }
         return null;
     }
@@ -177,24 +181,37 @@ public abstract class AbstractJavaVirtualMachine implements JavaVirtualMachine {
     @Override
     public void analyze(List<Aggregation> registeredAggregations, JVMEventChannel eventBus, DataSourceChannel dataSourceBus) {
         Phaser finishLine = new Phaser();
-        try {
-            Set<EventSource> generatedEvents = diary.generatesEvents();
-            for (Aggregation aggregation : registeredAggregations) {
-                Constructor<? extends Aggregator<?>> constructor = constructor(aggregation);
-                if ( constructor == null) continue;
-                Aggregator<? extends Aggregation> aggregator = constructor.newInstance(aggregation);
-                aggregatedData.put(aggregation.getClass(), aggregation);
-                Optional<EventSource> source = generatedEvents.stream().filter(aggregator::aggregates).findFirst();
-                if (source.isPresent()) {
-                    LOGGER.log(Level.FINE, "Registering: " + aggregation.getClass().getName());
-                    finishLine.register();
-                    aggregator.onCompletion(finishLine::arriveAndDeregister);
-                    JVMEventChannelAggregator eventChannelAggregator = new JVMEventChannelAggregator(source.get().toChannel(), aggregator);
-                    eventBus.registerListener(eventChannelAggregator);
-                }
+        Set<EventSource> generatedEvents = diary.generatesEvents();
+        for (Aggregation aggregation : registeredAggregations) {
+            if (debugging)
+                LOGGER.log(Level.INFO, "Evaluating: " + aggregation.toString());
+            Constructor<? extends Aggregator<?>> constructor = constructor(aggregation);
+            if (constructor == null) {
+                LOGGER.log(Level.WARNING, "Cannot find one of: default constructor or @Collates annotation for " + aggregation.getClass().getName());
+                continue;
             }
+            if (debugging)
+                LOGGER.log(Level.INFO, "Loading   : " + aggregation.toString());
+            Aggregator<? extends Aggregation> aggregator = null;
+            try {
+                aggregator = constructor.newInstance(aggregation);
+            } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+                LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                continue;
+            }
+            aggregatedData.put(aggregation.getClass(), aggregation);
+            Optional<EventSource> source = generatedEvents.stream().filter(aggregator::aggregates).findFirst();
+            if (source.isPresent()) {
+                LOGGER.log(Level.FINE, "Registering: " + aggregation.getClass().getName());
+                finishLine.register();
+                aggregator.onCompletion(finishLine::arriveAndDeregister);
+                JVMEventChannelAggregator eventChannelAggregator = new JVMEventChannelAggregator(source.get().toChannel(), aggregator);
+                eventBus.registerListener(eventChannelAggregator);
+            }
+        }
 
-            if ( finishLine.getRegisteredParties() > 0) {
+        try {
+            if (finishLine.getRegisteredParties() > 0) {
                 dataSource.stream().forEach(message -> dataSourceBus.publish(ChannelName.DATA_SOURCE, message));
                 finishLine.awaitAdvance(0);
             } else {
@@ -202,8 +219,6 @@ public abstract class AbstractJavaVirtualMachine implements JavaVirtualMachine {
                 LOGGER.log(Level.INFO, "Is there a module containing Aggregation classes on the module-path");
                 LOGGER.log(Level.INFO, "Is GCToolKit::loadAggregationsFromServiceLoader() or GCToolKit::loadAggregation(Aggregation) being invoked?");
             }
-            dataSourceBus.close();
-            eventBus.close();
 
             // Fill in termination info.
             Optional<Aggregation> aggregation = aggregatedData.values().stream().findFirst();
@@ -212,8 +227,11 @@ public abstract class AbstractJavaVirtualMachine implements JavaVirtualMachine {
                 setRuntimeDuration(terminationRecord.estimatedRuntime());
                 setEstimatedJVMStartTime(terminationRecord.estimatedStartTime());
             });
-        } catch (IOException | ClassCastException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
-            LOGGER.log(Level.WARNING, e.getMessage(), e);
+        } catch (IOException ioe) {
+            LOGGER.log(Level.SEVERE, ioe.getMessage(), ioe);
+        } finally {
+            dataSourceBus.close();
+            eventBus.close();
         }
     }
 }
