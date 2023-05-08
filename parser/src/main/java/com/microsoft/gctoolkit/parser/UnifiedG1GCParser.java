@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 package com.microsoft.gctoolkit.parser;
 
+import com.microsoft.gctoolkit.GCToolKit;
+import com.microsoft.gctoolkit.aggregator.EventSource;
 import com.microsoft.gctoolkit.event.CPUSummary;
 import com.microsoft.gctoolkit.event.GarbageCollectionTypes;
 import com.microsoft.gctoolkit.event.MalformedEvent;
@@ -26,6 +28,7 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.logging.Level;
@@ -46,7 +49,6 @@ import static com.microsoft.gctoolkit.event.GarbageCollectionTypes.fromLabel;
 public class UnifiedG1GCParser extends UnifiedGCLogParser implements UnifiedG1GCPatterns {
 
     private static final Logger LOGGER = Logger.getLogger(UnifiedG1GCParser.class.getName());
-    private boolean debugging = Boolean.getBoolean("microsoft.debug");
 
     private final Map<Integer, G1GCForwardReference> collectionsUnderway = new ConcurrentHashMap<>();
 
@@ -154,6 +156,11 @@ public class UnifiedG1GCParser extends UnifiedGCLogParser implements UnifiedG1GC
     }
 
     public UnifiedG1GCParser() {
+    }
+
+    @Override
+    public Set<EventSource> eventsProduced() {
+        return Set.of(EventSource.G1GC);
     }
 
     public String getName() {
@@ -450,34 +457,19 @@ public class UnifiedG1GCParser extends UnifiedGCLogParser implements UnifiedG1GC
         RegionSummary summary = trace.regionSummary();
         switch (trace.getGroup(1)) {
             case "Eden":
-                forwardReference.setEdenOccupancyBeforeCollection(summary.getBefore() * regionSize * 1024);
-                forwardReference.setEdenOccupancyAfterCollection(summary.getAfter() * regionSize * 1024);
-                forwardReference.setEdenSizeBeforeCollection(summary.getBefore() * regionSize * 1024);
-                forwardReference.setEdenSizeAfterCollection(summary.getAssigned() * regionSize * 1024);
+                forwardReference.setEdenRegionSummary(summary);
                 break;
             case "Survivor":
-                forwardReference.setSurvivorOccupancyBeforeCollection(summary.getBefore() * regionSize * 1024);
-                forwardReference.setSurvivorOccupancyAfterCollection(summary.getAfter() * regionSize * 1024);
-                forwardReference.setSurvivorSizeBeforeCollection(summary.getBefore() * regionSize * 1024);
-                forwardReference.setSurvivorSizeAfterCollection(summary.getAssigned() * regionSize * 1024);
+                forwardReference.setSurvivorRegionSummary(summary);
                 break;
             case "Old":
-                forwardReference.setOldOccupancyBeforeCollection(summary.getBefore() * regionSize * 1024);
-                forwardReference.setOldOccupancyAfterCollection(summary.getAfter() * regionSize * 1024);
-                forwardReference.setOldSizeBeforeCollection(summary.getBefore() * regionSize * 1024);
-                forwardReference.setOldSizeAfterCollection(summary.getAfter() * regionSize * 1024);
+                forwardReference.setOldRegionSummary(summary);
                 break;
             case "Humongous":
-                forwardReference.setHumongousOccupancyBeforeCollection(summary.getBefore() * regionSize * 1024);
-                forwardReference.setHumongousOccupancyAfterCollection(summary.getAfter() * regionSize * 1024);
-                forwardReference.setHumongousSizeBeforeCollection(summary.getBefore() * regionSize * 1024);
-                forwardReference.setHumongousSizeAfterCollection(summary.getAfter() * regionSize * 1024);
+                forwardReference.setHumongousRegionSummary(summary);
                 break;
             case "Archive":
-                forwardReference.setArchiveOccupancyBeforeCollection(summary.getBefore() * regionSize * 1024);
-                forwardReference.setArchiveOccupancyAfterCollection(summary.getAfter() * regionSize * 1024);
-                forwardReference.setArchiveSizeBeforeCollection(summary.getBefore() * regionSize * 1024);
-                forwardReference.setArchiveSizeAfterCollection(summary.getAfter() * regionSize * 1024);
+                forwardReference.setArchiveRegionSummary(summary);
                 break;
             default:
                 notYetImplemented(trace, line);
@@ -736,8 +728,7 @@ public class UnifiedG1GCParser extends UnifiedGCLogParser implements UnifiedG1GC
     private void log(String line) {
         if ( ! ignoreFrequentlySeenButUnwantedLines(line)) {
 
-            if (debugging)
-                LOGGER.fine("Missed: " + line);
+            GCToolKit.LOG_DEBUG_MESSAGE(() -> "Missed: " + line);
             LOGGER.log(Level.FINE, "Missed: {0}", line);
         }
     }
