@@ -26,13 +26,14 @@ import com.microsoft.gctoolkit.time.DateTimeStamp;
 import java.util.AbstractMap;
 import java.util.LinkedList;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static com.microsoft.gctoolkit.event.GarbageCollectionTypes.fromLabel;
 
@@ -173,34 +174,51 @@ public class UnifiedG1GCParser extends UnifiedGCLogParser implements UnifiedG1GC
             parse(line);
     }
 
+    private static final Pattern gcIdPattern = GCLogParser.GCID_COUNTER.pattern();
+
     private void parse(String line) {
-        Optional<AbstractMap.SimpleEntry<GCParseRule, GCLogTrace>> ruleToApply = parseRules.keys().stream()
-                .map(rule -> new AbstractMap.SimpleEntry<>(rule, rule.parse(line)))
-                .filter(tuple -> tuple.getValue() != null)
-                .findFirst();
-        if (!ruleToApply.isPresent()) {
-            log(line);
-            return;
+
+        // Minor optimization. The parse rule only applies to what comes after the GC ID.
+        final int end;
+        final int gcid;
+        final Matcher gcIdMatcher = gcIdPattern.matcher(line);
+        if (gcIdMatcher.find()) {
+            gcid = Integer.parseInt(gcIdMatcher.group(1));
+            end = gcIdMatcher.end();
+        } else {
+            gcid = -1;
+            end = 0;
         }
 
+        final String lineAfterGcId = line.substring(end);
+
+        parseRules.stream()
+                .map(Map.Entry::getKey)
+                .map(rule -> new AbstractMap.SimpleEntry<>(rule, rule.parse(lineAfterGcId)))
+                .filter(tuple -> tuple.getValue() != null)
+                .findAny()
+                .ifPresentOrElse(
+                        tuple -> {
+                            // Typically, "end" will be greater than zero, but not always.
+                            setForwardReference(gcid, end > 0 ? line.substring(0, end) : line);
+                            applyRule(tuple.getKey(), tuple.getValue(), line);
+                        },
+                        () -> log(line)
+                );
+    }
+
+
+    private void applyRule(GCParseRule ruleToApply, GCLogTrace trace, String line) {
         try {
-            setForwardReference(line);
-            parseRules.get(ruleToApply.get().getKey()).accept(ruleToApply.get().getValue(), line);
+            parseRules.select(ruleToApply).accept(trace, line);
         } catch (Throwable t) {
             LOGGER.throwing(this.getName(), "process", t);
         }
     }
 
-    private void setForwardReference(String line) {
-        GCLogTrace trace = GCID_COUNTER.parse(line);
-        if (trace != null) {
-            int gcid = trace.getIntegerGroup(1);
-            forwardReference = collectionsUnderway.get(gcid);
-            if (forwardReference == null) {
-                forwardReference = new G1GCForwardReference(new Decorators(line), trace.getIntegerGroup(1));
-                collectionsUnderway.put(forwardReference.getGcID(), forwardReference);
-            } else if (gcid != forwardReference.getGcID())
-                forwardReference = collectionsUnderway.get(gcid);
+    private void setForwardReference(int gcid, String line) {
+        if (gcid != -1) {
+            forwardReference = collectionsUnderway.computeIfAbsent(gcid, k -> new G1GCForwardReference(new Decorators(line), gcid));
         }
     }
 
@@ -278,18 +296,18 @@ public class UnifiedG1GCParser extends UnifiedGCLogParser implements UnifiedG1GC
     //[15.316s][debug][gc,heap      ] GC(0)   region size 1024K, 24 young (24576K), 0 survivors (0K)
     //ignore this logging for now
     private void youngRegionAllotment(GCLogTrace trace, String line) {
-//        if (before) {
-//            forwardReference.setYoungOccupancyBeforeCollection(trace.getLongGroup(3));
-//            forwardReference.setSurvivorOccupancyBeforeCollection(trace.getLongGroup(5));
-//            forwardReference.setEdenOccupancyBeforeCollection(trace.getLongGroup(3)-trace.getLongGroup(5));
-//            forwardReference.setYoungSizeBeforeCollection(trace.getLongGroup(3));
-//        }
-//        else {
-//            forwardReference.setYoungOccupancyAfterCollection(trace.getLongGroup(5));
-//            forwardReference.setSurvivorOccupancyAfterCollection(trace.getLongGroup(5));
-//            forwardReference.setEdenOccupancyAfterCollection(0L);
-//            forwardReference.setYoungSizeAfterCollection(trace.getLongGroup(3));
-//        }
+        if (before) {
+            forwardReference.setYoungOccupancyBeforeCollection(trace.getLongGroup(3));
+            forwardReference.setSurvivorOccupancyBeforeCollection(trace.getLongGroup(5));
+            forwardReference.setEdenOccupancyBeforeCollection(trace.getLongGroup(3)-trace.getLongGroup(5));
+            forwardReference.setYoungSizeBeforeCollection(trace.getLongGroup(3));
+        }
+        else {
+            forwardReference.setYoungOccupancyAfterCollection(trace.getLongGroup(5));
+            forwardReference.setSurvivorOccupancyAfterCollection(trace.getLongGroup(5));
+            forwardReference.setEdenOccupancyAfterCollection(0L);
+            forwardReference.setYoungSizeAfterCollection(trace.getLongGroup(3));
+        }
     }
 
     /**
