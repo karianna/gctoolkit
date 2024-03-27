@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-package com.microsoft.gctoolkit.parser.patterns;
+package com.microsoft.gctoolkit.parser;
 
 
 import com.microsoft.gctoolkit.event.MemoryPoolSummary;
@@ -29,7 +29,6 @@ public abstract class ParserTest {
         channel = new ParserTestSupportChannel();
         diarizer = diarizer();
         parser = parser();
-        parser.diary(diarizer.getDiary());
         parser.publishTo(channel);
     }
 
@@ -45,6 +44,10 @@ public abstract class ParserTest {
      */
     protected abstract GCLogParser parser();
 
+    GCLogParser getParser() {
+        return this.parser;
+    }
+
     /**
      * Parser runs in its own thread so start one for it and then feed it the lines to be parsed
      *
@@ -53,6 +56,7 @@ public abstract class ParserTest {
      */
     protected List<JVMEvent> feedParser(String[] lines) {
         Arrays.stream(lines).forEach(diarizer::diarize);
+        parser.diary(diarizer.getDiary());
         Arrays.stream(lines).map(String::trim).forEach(parser::receive);
         return channel.events();
     }

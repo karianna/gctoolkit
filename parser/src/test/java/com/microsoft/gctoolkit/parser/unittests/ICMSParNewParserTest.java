@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -18,8 +17,6 @@ public class ICMSParNewParserTest extends ParserTest {
     0,          1,      2,                         3,                                4,                       5,                           6,          7,              8,                                 9,          10,           11,     12
     Young, DefNew, ParNew, ParNew (promotion failed), ParNew (concurrent mode failure), concurrent-mode-failure, concurrent mode interrupted, PSYoungGen, Full GC/PSFull, Full GC (concurrent mode failure), System.gc(), Initial-mark, Remark
     */
-
-    private static final Logger LOGGER = Logger.getLogger(ICMSParNewParserTest.class.getName());
 
     @Test
     public void testForSimpleLogs() {
@@ -45,22 +42,22 @@ public class ICMSParNewParserTest extends ParserTest {
     };
 
     private static final int[] detailsCountsNumberOfDifferentCollectors = {
-            5,
-            3,
-            3,
-            4,
-            7,
-            7
+             10,
+              8,
+              8,
+              9,
+             12,
+             12
     };
 
     private static final int[][] detailsCounts = {
-            //   0,      1,      2,      3,      4,      5,      6,      7,      8,      9,     10,     11      12
-            {0, 0,  12359, 41, 0, 41, 0, 0, 0, 0, 0, 179, 166},
-            {0, 0,   2564,  0, 0, 0, 0, 0, 0, 0, 0, 13, 13},
-            {0, 0,   2564,  0, 0, 0, 0, 0, 0, 0, 0, 11, 11},
-            {0, 0,   1374,  0, 0, 0, 1, 0, 0, 0, 0, 3, 2},
-            {0, 0, 143550, 75, 0, 306, 0, 0, 7, 0, 1, 10272, 10015},
-            {0, 0,  72397, 43, 0, 173, 0, 0, 4, 0, 1, 5137, 4985}
+          //  0,  1,      2,   3,  4,   5,  6,  7,  8,  9, 10,    11,    12,    13,    14,    15,    16,   17
+            { 0,  0,  12359,  41,  0,  41,  0,  0,  0,  0,  0,   179,   166,   179,   177,   166,   166,  138},
+            { 0,  0,   2564,   0,  0,   0,  0,  0,  0,  0,  0,    13,    13,    13,    13,    13,    13,   13},
+            { 0,  0,   2564,   0,  0,   0,  0,  0,  0,  0,  0,    11,    11,    11,    11,    11,    11,   11},
+            { 0,  0,   1374,   0,  0,   0,  1,  0,  0,  0,  0,     3,     2,     3,     2,     2,     2,    2},
+            { 0,  0, 143543,  75,  0, 306,  0,  0,  7,  0,  1, 10272, 10015, 10271, 10039, 10018, 10015, 9969},
+            { 0,  0,  72395,  43,  0, 173,  0,  0,  4,  0,  1,  5137,  4985,  5136,  4994,  4986,  4985, 4966}
     };
 
 
@@ -87,21 +84,21 @@ public class ICMSParNewParserTest extends ParserTest {
     };
 
     private static final int[] detailsTenuringCountsNumberOfDifferentCollectors = {
-            5,
-            4,
-            6,
-            3,
-            4
+            10,
+             9,
+            11,
+             8,
+             9
 
     };
 
     private static final int[][] detailsTenuringCounts = {
-            //    0,    1,     2,     3,     4,     5,     6,      7,     8,     9,    10,    11,    12
-            {0, 0,     67,  0, 0, 1, 0, 0, 1, 0, 0, 25, 24},
-            {0, 0,   6244,  0, 0, 0, 0, 0, 0, 0, 1, 2087, 2087},
-            {0, 0, 417815, 83, 0, 84, 0, 0, 76, 0, 0, 7840, 7809},
-            {0, 0,  32558,  0, 0, 0, 0, 0, 0, 0, 0, 103, 103},
-            {0, 0,  18507,  0, 0, 0, 1, 0, 0, 0, 0, 6, 5},
+          //  0,  1,     2,   3,  4,  5,  6,  7,  8,  9, 10,   11,   12,   13,   14,   15,   16,   17
+            { 0,  0,     67,  0,  0,  1,  0,  0,  1,  0,  0,   25,   24,   25,   24,   24,   24,   24},
+            { 0,  0,   6240,  0,  0,  0,  0,  0,  0,  0,  1, 2087, 2087, 2087, 2087, 2087, 2086, 2086},
+            { 0,  0, 417811, 83,  0, 84,  0,  0, 76,  0,  0, 7840, 7809, 7824, 7809, 7783, 7757, 7756},
+            { 0,  0,  32439,  0,  0,  0,  0,  0,  0,  0,  0,  103,  103,  103,  103,  102,  102,  102},
+            { 0,  0,  18507,  0,  0,  0,  1,  0,  0,  0,  0,    6,    5,    6,    5,    5,    5,    5},
     };
 
 
@@ -124,12 +121,12 @@ public class ICMSParNewParserTest extends ParserTest {
     };
 
     private static final int[] detailsDebugCountsNumberOfDifferentCollectors = {
-            3
+            8
 
     };
 
     private static final int[][] detailsDebugCounts = {
-            //    0,     1,     2,     3,     4,     5,     6,     7,     8,     9,    10,    11,    12
-            {0, 0, 3093, 0, 0, 0, 0, 0, 0, 0, 0, 533, 532}
+          //  0,  1,    2,  3,  4,  5,  6,  7,  8,  9, 10,  11,  12,  13,  14,  15,  16,  17
+            { 0,  0, 3089,  0,  0,  0,  0,  0,  0,  0,  0, 533, 532, 532, 532, 532, 532, 532}
     };
 }

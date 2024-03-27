@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 package com.microsoft.gctoolkit.time;
 
+import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.chrono.ChronoZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -28,7 +30,7 @@ public class DateTimeStamp implements Comparable<DateTimeStamp> {
     // In the case where we have timestamps, the epoch is start of JVM
     // In the case where we only have date stamps, the epoch is 1970:01:01:00:00:00.000::UTC+0
     // All calculations in GCToolKit make use of the double, timeStamp.
-    // Calculations are based on an startup Epoch of 0.000 seconds. This isn't always the case and
+    // Calculations are based on the startup Epoch of 0.000 seconds. This isn't always the case and
     // certainly isn't the case when only date stamp is present. In these cases, start time is estimated.
     // This is surprisingly difficult to do thus use of timestamp is highly recommended.
 
@@ -36,8 +38,9 @@ public class DateTimeStamp implements Comparable<DateTimeStamp> {
     // Timestamp can never be less than 0
     //      - use NaN to say it's not set
     public final static double TIMESTAMP_NOT_SET = Double.NaN;
+    public final static ZonedDateTime EPOC = ZonedDateTime.ofInstant(Instant.EPOCH, ZoneId.of("GMT"));
     private final ZonedDateTime dateTime;
-    private double timeStamp;
+    private final double timeStamp;
     public static final Comparator<DateTimeStamp> comparator = getComparator();
 
     // For some reason, ISO_DATE_TIME doesn't like that time-zone is -0100. It wants -01:00.
@@ -58,12 +61,12 @@ public class DateTimeStamp implements Comparable<DateTimeStamp> {
 
     private static final String DECIMAL_POINT = "(?:\\.|,)";
     private static final String INTEGER = "\\d+";
-    private static final String DATE = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}[\\+|\\-]\\d{4}";
+    private static final String DATE = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}[+|-]\\d{4}";
     private static final String TIME = INTEGER + DECIMAL_POINT + "\\d{3}";
 
     // Unified Tokens
-    private static final String DATE_TAG = "\\[" + DATE + "\\]";
-    private static final String UPTIME_TAG = "\\[(" + TIME + ")s\\]";
+    private static final String DATE_TAG = "\\[" + DATE + "]";
+    private static final String UPTIME_TAG = "\\[(" + TIME + ")s]";
 
     // Pre-unified tokens
     private static final String TIMESTAMP = "(" + TIME + "): ";
@@ -74,7 +77,7 @@ public class DateTimeStamp implements Comparable<DateTimeStamp> {
     private static final Pattern PREUNIFIED_DATE_TIMESTAMP = Pattern.compile(DATE_TIMESTAMP);
     // JEP 158 has ISO-8601 time and uptime in seconds and milliseconds as the first two decorators.
     private static final Pattern UNIFIED_DATE_TIMESTAMP = Pattern.compile("^(" + DATE_TAG + ")?(" + UPTIME_TAG + ")?");
-    private static final DateTimeStamp EMPTY_DATE = new DateTimeStamp(TIMESTAMP_NOT_SET);
+    public static final DateTimeStamp EMPTY_DATE = new DateTimeStamp(EPOC, TIMESTAMP_NOT_SET);
 
     public static DateTimeStamp fromGCLogLine(String line) {
         Matcher matcher;
@@ -89,6 +92,14 @@ public class DateTimeStamp implements Comparable<DateTimeStamp> {
             return new DateTimeStamp(dateFromString(matcher.group(1)), ageFromString(matcher.group(captureGroup)));
         else
             return EMPTY_DATE;
+    }
+
+    /**
+     * Provides a minimal date.
+     * @return a minimal date
+     */
+    public static DateTimeStamp baseDate() {
+        return new DateTimeStamp(EPOC, 0.0d);
     }
 
     /**
@@ -147,10 +158,21 @@ public class DateTimeStamp implements Comparable<DateTimeStamp> {
      * Return the time stamp value. Allows a consistent time stamp be available to all calculations.
      * @return The time stamp value, in decimal seconds.
      */
+    @Deprecated
     public double getTimeStamp() {
         if (!hasTimeStamp())
             return toEpochInMillis();
         return timeStamp;
+    }
+
+    public double toMilliseconds() {
+        if (!hasTimeStamp())
+            return toEpochInMillis();
+        return timeStamp * 1000.0d;
+    }
+
+    public double toSeconds() {
+        return toMilliseconds() / 1000.0d;
     }
 
     /**
@@ -164,10 +186,10 @@ public class DateTimeStamp implements Comparable<DateTimeStamp> {
     /**
      * Return {@code true} if the date stamp is not {@code null}.
      * It is possible to have two DateTimeStamps from the same GC log, one with a DateStamp and one without.
-     * @return {@code true} if the the date stamp is not {@code null}.
+     * @return {@code true} if the date stamp is not {@code null}.
      */
     public boolean hasDateStamp() {
-        return getDateTime() != null;
+        return ! (getDateTime() == null || EPOC.equals(getDateTime()));
     }
 
     public boolean hasTimeStamp() {
@@ -328,7 +350,7 @@ public class DateTimeStamp implements Comparable<DateTimeStamp> {
         else if (o1.hasDateStamp() && o2.hasDateStamp())
             return comparing(DateTimeStamp::getDateTime, ChronoZonedDateTime::compareTo);
         else
-            throw new IllegalStateException("DateTimeStamp parameters cannot be compared as either timestamp or datestamp must be set.");
+            throw new IllegalStateException("DateTimeStamp parameters cannot be compared as either timestamp or datestamp must be set in both instances.");
     }
 
     public double toEpochInMillis() {

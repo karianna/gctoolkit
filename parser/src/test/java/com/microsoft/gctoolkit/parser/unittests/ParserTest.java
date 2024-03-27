@@ -51,11 +51,17 @@ public abstract class ParserTest {
             Map.entry(GarbageCollectionTypes.InitialMark, 11),
             Map.entry(GarbageCollectionTypes.Remark, 12),
             Map.entry(GarbageCollectionTypes.PSFull, 8),  // bit of a hack to account that the parser is now differentiating between Full and PSFull. (kcp 11/8/15)
+            Map.entry(GarbageCollectionTypes.ConcurrentMark, 13),
+
+            Map.entry(GarbageCollectionTypes.Concurrent_Preclean, 14),
+            Map.entry(GarbageCollectionTypes.Abortable_Preclean,15),
+            Map.entry(GarbageCollectionTypes.Concurrent_Sweep, 16),
+            Map.entry(GarbageCollectionTypes.Concurrent_Reset, 17),
+
             Map.entry(GarbageCollectionTypes.Mixed, 1),
             Map.entry(GarbageCollectionTypes.G1GCYoungInitialMark, 2),
             Map.entry(GarbageCollectionTypes.G1GCMixedInitialMark, 3),
             Map.entry(GarbageCollectionTypes.Full, 4),
-            Map.entry(GarbageCollectionTypes.ConcurrentMark, 5),
             Map.entry(GarbageCollectionTypes.G1GCConcurrentMark, 5),
             Map.entry(GarbageCollectionTypes.G1GCRemark, 7),
 
@@ -86,7 +92,6 @@ public abstract class ParserTest {
         for (int i = 0; i < invocationCounts.length; i++) {
             assertEquals(invocationCounts[i], testResults.getCount(i), "Phase Count Differs @ " + i + " for " + findGarbageCollector(i) + " in " + gcLogName);
         }
-
     }
 
     private GCLogFile loadLogFile(Path path, boolean rotating) throws IOException {
@@ -106,12 +111,14 @@ public abstract class ParserTest {
                     map(jvmConfiguration::diarize).
                     filter(completed -> completed).
                     findFirst();
-
-            jvmConfiguration.fillInKnowns();
             return jvmConfiguration;
         } catch (IOException e) {
             fail(e.getMessage());
         }
+        return null;
+    }
+
+    TestResults executeParsing(GCLogFile logfile) {
         return null;
     }
     
@@ -139,11 +146,11 @@ public abstract class ParserTest {
 
     TestResults testUnifiedG1GCSingleFile(Path path) throws IOException {
         SingleGCLogFile logfile = new SingleGCLogFile(path);
-        UnifiedDiarizer unifiedJVMConfiguration = new UnifiedDiarizer();
+        Diarizer jvmConfiguration = getJVMConfiguration(logfile);
         UnifiedG1GCParser parser = new UnifiedG1GCParser();
         TestResults testResults = new TestResults();
         parser.publishTo(testResults);
-        parser.diary(unifiedJVMConfiguration.getDiary());
+        parser.diary(jvmConfiguration.getDiary());
         logfile.stream().map(String::trim).forEach(parser::receive);
         return testResults;
     }
@@ -151,6 +158,7 @@ public abstract class ParserTest {
     TestResults testRegionalRotatingLogFile(Path path) throws IOException {
         GCLogFile logfile = loadLogFile(path, true);
         Diarizer jvmConfiguration = getJVMConfiguration(logfile);
+        logfile.stream().map(String::trim).forEach(jvmConfiguration::diarize);
         PreUnifiedG1GCParser parser = new PreUnifiedG1GCParser();
         TestResults testResults = new TestResults();
         parser.publishTo(testResults);
