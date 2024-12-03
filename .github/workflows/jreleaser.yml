@@ -1,4 +1,4 @@
-name: Publish to Maven Central
+name: Release to GitHub using JReleaser
 
 on:
   workflow_dispatch:
@@ -30,13 +30,13 @@ jobs:
           server-id: ossrh
           server-username: MAVEN_USERNAME
           server-password: MAVEN_CENTRAL_TOKEN
-          gpg-private-key: ${{ secrets.GPG_PRIVATEKEY }}
-          gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
       - name: Configure Git user
         run: |
-          git config user.email "actions@github.com"
-          git config user.name "GitHub Actions"
+          git config user.email "noreply@github.com"
+          git config user.name "GitHub"
+          git config committer.name "GitHub"
+            git config committer.email "noreply@github.com"
 
       - name: Version
         id: version
@@ -44,21 +44,10 @@ jobs:
           release_version=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)
           release_version=${release_version%-*}
           echo ::set-output name=version::${release_version}
-          
-      - name: Release
-        run: |
-          export GPG_TTY=$(tty)
-          ./mvnw -Darguments="-Drelease=true" -B release:prepare release:perform -Drelease=true \
-            -Drepository.url=https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-
-        env:
-          MAVEN_USERNAME: ${{ secrets.SONATYPE_NAME }}
-          MAVEN_CENTRAL_TOKEN: ${{ secrets.SONATYPE_PASSWORD }}
-          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Git-release
         run: |
           ./mvnw -B versions:set -DnewVersion=${{steps.version.outputs.version}}
           ./mvnw -B -pl :gctoolkit -Pjreleaser jreleaser:release
         env:
-          JRELEASER_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JRELEASER_GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
